@@ -3,11 +3,13 @@ from aiogram.types import (Message,CallbackQuery, ReplyKeyboardMarkup, InlineKey
                            InlineKeyboardButton, KeyboardButton )
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from models import (bot_token, connect, create_tables, conn, ADMIN,
+from models import (bot_token, connect, create_tables, ADMIN, groq_api,
                     inser_item, get_items, get_item_by_id, inser_order, get_my_orders)
 from buttons import menu_buttons, cancel_button
 import asyncio
+from groq import Groq
 
+client = Groq(api_key=groq_api)
 
 bot = Bot(token=bot_token)
 dp= Dispatcher()
@@ -43,7 +45,7 @@ async def menu_func(message: Message, state: FSMContext):
         return
     buttons =[]
     for i in items:
-        button = [InlineKeyboardButton(text=f"{i['title']}, {i['price']}tjk", callback_data=f"item:{i['id']}")]  # item:1
+        button = [InlineKeyboardButton(text=f"{i['title']}, {i['price']}tjk", callback_data=f"item:{i['id']}")]  # item:
         buttons.append(button)
 
     items_button = InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -66,7 +68,7 @@ async def menu_func(message: Message, state: FSMContext):
 
 @dp.callback_query(F.data.startswith('item:'))
 async def order(call: CallbackQuery, state: FSMContext):
-    item_id = int(call.data.split(':')[1])   #order 1
+    item_id = int(call.data.split(':')[1])   #data = item:1 --> [item, 1]
     item = await get_item_by_id(item_id)
     order = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text='✅Order now', callback_data=f'order:{item["id"]}')]
@@ -165,7 +167,7 @@ async def add_items(message: Message, state: FSMContext):
 async def add_items(message: Message, state: FSMContext):
     photo_url = message.photo[-1].file_id
     print(photo_url, 'id file in telegram server')
-    data = await state.get_data()
+    data =  state.get_data()
     try:
         await inser_item(data['title'],data['description'], data['price'], photo_url )
         await message.answer(f'Item added successfully\n{data["title"]}', reply_markup=menu_buttons())
@@ -175,6 +177,37 @@ async def add_items(message: Message, state: FSMContext):
     finally:
         await state.clear()
 
+@dp.message()
+async def ai_answer(message: Message):
+    items = await get_items()
+    text = ''
+    for i in items:
+        text += f" title:{i['title']},  description:{i['description']}, price:{i['price']}in somini \n"
+
+    promt = f""" You are telegrambot ai ur name is Softbot that help clients to choose
+    item from our restaratn and eat
+    so be kind answer them in langguage they speak  mostly ur users aer from tajikistan
+    so speak tajik langauge correctly and wel
+    dont speak from urslef dont lie speak only what u know dont add smth fromurself
+    user emoji like humans  
+    THE TEXT that u want to look good for exampole bold or else we are coding in aiogram use html tegs that except aiogram they are only 4 
+    DONT LIE ABOUT MENU ONLY SUGGEST FROM OUR MENU 
+    HERE IS MENU FOR U {text}
+    U CAN ANSER USER WITH HIS LANGAUGE IF HE WANT TO ORDER SMTH TELL HIM USE BUTTON 📗 Menu FOR SEE PHOTO AND DETAIL
+    INFO OF ITEM AND IF HE WANT TO ORDER PUSH THE BUTTON OF ✅Order now 
+    ONNLY ANSER QUETSION THAT ARE ABOUT OUR RESTARAUTN 
+
+    """
+    response = client.chat.completions.create(
+        model='openai/gpt-oss-120b',
+        messages=[
+            {'role':'user', 'content': message.text},
+            {'role':'system', 'content':promt},
+        ]
+    )
+    await message.answer(response.choices[0].message.content, parse_mode='HTML')
+
+    
 
 async def main():
     await connect()

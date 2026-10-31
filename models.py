@@ -6,6 +6,8 @@ load_dotenv()
 
 bot_token = os.getenv('BOT_TOKEN')
 ADMIN = int(os.getenv('ADMIN'))
+groq_api = os.getenv('GROQ_API')
+
 conn = None
 
 async def connect():
